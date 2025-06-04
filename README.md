@@ -110,6 +110,14 @@ The extension automatically detects and applies syntax highlighting for 40+ lang
 - Shell scripts (`.sh`, `.bash`)
 - And many more...
 
+### Configuration settings.json
+```json
+{
+    "copyForContext.minifyContent": true,
+    "copyForContext.removeComments": false,
+}
+```
+
 ## Installation
 
 ### Development Setup
