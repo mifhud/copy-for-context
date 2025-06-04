@@ -1,0 +1,109 @@
+{
+  "name": "copy-for-context",
+  "displayName": "Copy for Context",
+  "description": "Quickly copy files as minified, formatted markdown for sharing context",
+  "version": "1.0.0",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:copyForContext.copySelectedFiles",
+    "onCommand:copyForContext.copyActiveFile",
+    "onCommand:copyForContext.copyTabGroup",
+    "onCommand:copyForContext.copyAllTabs",
+    "onCommand:copyForContext.copySelectedTab"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Copy for Context",
+      "properties": {
+        "copyForContext.minifyContent": {
+          "type": "boolean",
+          "default": false,
+          "description": "When enabled, fully minifies code by removing all comments, unnecessary whitespace, and newlines - similar to JavaScript minification"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "copyForContext.copySelectedFiles",
+        "title": "Copy for Context"
+      },
+      {
+        "command": "copyForContext.copyActiveFile",
+        "title": "Copy This File for Context"
+      },
+      {
+        "command": "copyForContext.copyTabGroup",
+        "title": "Copy This Tab Group for Context"
+      },
+      {
+        "command": "copyForContext.copyAllTabs",
+        "title": "Copy All Open Tabs for Context"
+      },
+      {
+        "command": "copyForContext.copySelectedTab",
+        "title": "Copy Selected Files for Context"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "copyForContext.copySelectedFiles",
+          "when": "explorerResourceIsFolder == false",
+          "group": "7_modification"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "copyForContext.copyActiveFile",
+          "group": "1_copy"
+        },
+        {
+          "command": "copyForContext.copyTabGroup",
+          "group": "1_copy"
+        },
+        {
+          "command": "copyForContext.copyAllTabs",
+          "group": "1_copy"
+        },
+        {
+          "command": "copyForContext.copySelectedTab",
+          "group": "1_copy"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "copyForContext.copyActiveFile",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "copyForContext.copyTabGroup",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "copyForContext.copyAllTabs",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "copyForContext.copySelectedTab",
+          "when": "editorIsOpen"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "16.x",
+    "typescript": "^4.9.4"
+  }
+}
