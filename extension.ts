@@ -10,8 +10,8 @@ interface FileContent {
 
 export function activate(context: vscode.ExtensionContext) {
     // Register all commands
-    const copySelectedFiles = vscode.commands.registerCommand('copyForContext.copySelectedFiles', async (...args) => {
-        await handleCopySelectedFiles(args);
+    const copySelectedFiles = vscode.commands.registerCommand('copyForContext.copySelectedFiles', async (clickedFile: vscode.Uri, selectedFiles: vscode.Uri[]) => {
+        await handleCopySelectedFiles(clickedFile, selectedFiles);
     });
 
     const copyActiveFile = vscode.commands.registerCommand('copyForContext.copyActiveFile', async () => {
@@ -39,19 +39,29 @@ export function activate(context: vscode.ExtensionContext) {
     );
 }
 
-async function handleCopySelectedFiles(args: any[]) {
+async function handleCopySelectedFiles(clickedFile: vscode.Uri, selectedFiles: vscode.Uri[]) {
     try {
-        // Fix: Handle multiple selected files properly
-        const selectedFiles: vscode.Uri[] = Array.isArray(args) && args.length > 0 ? 
-            (Array.isArray(args[0]) ? args[0] : args) : [];
+        // When files are selected in Explorer, VS Code passes:
+        // - clickedFile: the file that was right-clicked
+        // - selectedFiles: array of all selected files (including the clicked file)
         
-        if (selectedFiles.length === 0) {
+        let filesToProcess: vscode.Uri[] = [];
+        
+        if (selectedFiles && selectedFiles.length > 0) {
+            // Multiple files selected - use all selected files
+            filesToProcess = selectedFiles;
+        } else if (clickedFile) {
+            // Only one file clicked - use just that file
+            filesToProcess = [clickedFile];
+        } else {
             vscode.window.showWarningMessage('No files selected');
             return;
         }
 
+        console.log(`Processing ${filesToProcess.length} files:`, filesToProcess.map(f => f.fsPath));
+
         const fileContents = await Promise.all(
-            selectedFiles.map(async (fileUri) => {
+            filesToProcess.map(async (fileUri) => {
                 if (await isFile(fileUri)) {
                     return await readFileContent(fileUri);
                 }
@@ -69,6 +79,7 @@ async function handleCopySelectedFiles(args: any[]) {
         await copyToClipboard(markdown);
         vscode.window.showInformationMessage(`Copied ${validFiles.length} file(s) to clipboard`);
     } catch (error) {
+        console.error('Error in handleCopySelectedFiles:', error);
         vscode.window.showErrorMessage(`Error copying files: ${error}`);
     }
 }
