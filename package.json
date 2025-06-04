@@ -25,6 +25,11 @@
           "type": "boolean",
           "default": false,
           "description": "When enabled, fully minifies code by removing all comments, unnecessary whitespace, and newlines - similar to JavaScript minification"
+        },
+        "copyForContext.removeComments": {
+          "type": "boolean",
+          "default": true,
+          "description": "When minification is enabled, controls whether comments are removed from the code. Only applies when minifyContent is true."
         }
       }
     },

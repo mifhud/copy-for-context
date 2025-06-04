@@ -308,7 +308,7 @@ function getRelativePath(uri: vscode.Uri): string {
 async function generateMarkdown(files: FileContent[]): Promise<string> {
     let markdown = '';
     
-    // Get minification setting
+    // Get configuration settings
     const config = vscode.workspace.getConfiguration('copyForContext');
     const shouldMinify = config.get<boolean>('minifyContent', false);
 
@@ -336,14 +336,20 @@ async function generateMarkdown(files: FileContent[]): Promise<string> {
 }
 
 function minifyContent(content: string, language: string): string {
-    // Full minification - remove all unnecessary whitespace, newlines, and comments
+    // Get configuration settings
+    const config = vscode.workspace.getConfiguration('copyForContext');
+    const shouldRemoveComments = config.get<boolean>('removeComments', true);
+    
     let minified = content;
     
-    // Remove multi-line comments first
-    minified = removeMultiLineComments(minified, language);
-    
-    // Remove single-line comments
-    minified = removeSingleLineComments(minified, language);
+    // Remove comments only if the setting is enabled
+    if (shouldRemoveComments) {
+        // Remove multi-line comments first
+        minified = removeMultiLineComments(minified, language);
+        
+        // Remove single-line comments
+        minified = removeSingleLineComments(minified, language);
+    }
     
     // Split into lines and process
     const lines = minified.split('\n');
