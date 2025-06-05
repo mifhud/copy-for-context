@@ -1,6 +1,6 @@
 # Copy for Context
 
-A VS Code extension that efficiently copies selected files as markdown with syntax highlighting and minimized content—perfect for sharing code context in documentation, issues, or chat applications.
+A VS Code extension that efficiently copies selected files as markdown with syntax highlighting and minimized content—perfect for sharing code context in chat applications.
 
 ## Features
 
@@ -29,13 +29,40 @@ A VS Code extension that efficiently copies selected files as markdown with synt
 - Right-click any tab title or use Command Palette
 - Alternative way to copy the currently selected tab file as markdown
 
+### 🏗️ Copy Folder Structure Only
+- Right-click on any folder in the Explorer
+- Copies the directory tree structure without file contents
+- Perfect for sharing project organization
+- Shows folders (📁) and files (📄) with proper indentation
+
+### 📁 Copy Folder Structure with File Structure
+- Right-click on any folder in the Explorer
+- Copies both the directory structure and all file contents
+- Ideal for sharing complete project context
+- Combines folder tree visualization with actual code
+
+### 🚫 Gitignore Support (NEW)
+- Automatically respects `.gitignore` rules when copying folders
+- Excludes files and directories listed in `.gitignore`
+- Can be toggled on/off in settings
+- Works with all folder-related copy operations
+
 ## Usage
 
 ### From Explorer
+
+#### Files
 1. Select one or more files in the VS Code Explorer
 2. Right-click on the selection
 3. Choose **"Copy for Context"**
 4. The formatted markdown is now in your clipboard
+
+#### Folders
+1. Right-click on any folder in the VS Code Explorer
+2. Choose one of the folder options:
+   - **"Copy Folder Structure Only"** - Gets directory tree without file contents
+   - **"Copy Folder Structure with File Structure"** - Gets directory tree plus all file contents
+3. The formatted markdown is now in your clipboard
 
 ### From Tab Context Menu
 1. Right-click on any tab title
@@ -52,6 +79,7 @@ A VS Code extension that efficiently copies selected files as markdown with synt
 
 ## Output Format
 
+### File Contents
 The extension generates clean markdown with:
 - File paths as level 2 headers (`## path/to/file.js`)
 - Code blocks with automatic language detection
@@ -60,7 +88,6 @@ The extension generates clean markdown with:
 Example output:
 ```markdown
 ## src/components/Button.tsx
-
 ```tsx
 import React from 'react';
 
@@ -79,7 +106,6 @@ export const Button: React.FC<ButtonProps> = ({ onClick, children }) => {
 ```
 
 ## src/styles/button.css
-
 ```css
 .button {
   padding: 8px 16px;
@@ -90,9 +116,65 @@ export const Button: React.FC<ButtonProps> = ({ onClick, children }) => {
 ```
 ```
 
+### Folder Structure Only
+Example output:
+```markdown
+# Folder Structure
+
+## src
+
+```
+📁 src
+  📁 components
+  📁 styles
+```
+```
+
+### Folder Structure with File Structure
+Example output:
+```markdown
+## Folder Structure
+
+# src
+
+```
+📁 src
+  📁 components
+    📄 Button.tsx
+    📄 Header.tsx
+  📁 styles
+    📄 button.css
+    📄 header.css
+  📄 index.ts
+```
+
+## Files
+
+## src/components/Button.tsx
+```tsx
+import React from 'react';
+// ... file content
+```
+
+## src/components/Header.tsx
+```tsx
+import React from 'react';
+// ... file content
+```
+
+## src/styles/button.css
+```css
+.button {
+  padding: 8px 16px;
+  // ... file content
+}
+```
+```
+
 ## Supported Languages
 
 The extension automatically detects and applies syntax highlighting for 40+ languages including:
+
 - JavaScript/TypeScript (`.js`, `.jsx`, `.ts`, `.tsx`)
 - Python (`.py`)
 - Java (`.java`)
@@ -110,15 +192,67 @@ The extension automatically detects and applies syntax highlighting for 40+ lang
 - Shell scripts (`.sh`, `.bash`)
 - And many more...
 
-### Configuration settings.json
+## Configuration
+
+Add these settings to your `settings.json`:
+
 ```json
 {
-    "copyForContext.minifyContent": true,
-    "copyForContext.removeComments": false,
+  "copyForContext.minifyContent": false,
+  "copyForContext.removeComments": true,
+  "copyForContext.respectGitignore": true
 }
 ```
 
+### Available Settings
+
+- **`copyForContext.minifyContent`** (boolean, default: `false`)
+  - When enabled, fully minifies code by removing all comments, unnecessary whitespace, and newlines - similar to JavaScript minification
+
+- **`copyForContext.removeComments`** (boolean, default: `true`)
+  - When minification is enabled, controls whether comments are removed from the code. Only applies when `minifyContent` is true.
+
+- **`copyForContext.respectGitignore`** (boolean, default: `true`)
+  - When enabled, files and folders listed in `.gitignore` will be excluded from the copy process. Applies to all folder-related operations.
+
+## Gitignore Support
+
+The extension includes intelligent `.gitignore` support:
+
+- **Automatic Detection**: Looks for `.gitignore` in your workspace root
+- **Pattern Matching**: Supports common gitignore patterns including:
+  - Exact file/folder names (`node_modules`)
+  - Wildcards (`*.log`, `temp*`)
+  - Directory patterns (`dist/`, `build/`)
+  - Path-based patterns (`src/temp/`)
+- **Configurable**: Can be disabled via settings if needed
+- **Folder Operations**: Only affects folder-related copy operations
+
+### Gitignore Examples
+
+If your `.gitignore` contains:
+```
+node_modules/
+*.log
+dist
+.env
+temp*
+```
+
+The extension will automatically exclude:
+- The entire `node_modules` folder
+- Any `.log` files
+- The `dist` folder
+- `.env` files
+- Any files/folders starting with `temp`
+
 ## Installation
+
+### From VS Code Marketplace
+1. Open VS Code
+2. Go to Extensions (`Ctrl+Shift+X`)
+3. Search for "Copy for Context"
+4. Click Install
 
 ### Development Setup
 1. Clone this repository

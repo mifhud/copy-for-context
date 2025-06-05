@@ -1,7 +1,7 @@
 {
   "name": "copy-for-context",
   "displayName": "Copy for Context",
-  "description": "Quickly copy files as minified, formatted markdown for sharing context",
+  "description": "Quickly copy files as minified,formatted markdown for sharing context",
   "version": "1.0.0",
   "engines": {
     "vscode": "^1.74.0"
@@ -14,7 +14,9 @@
     "onCommand:copyForContext.copyActiveFile",
     "onCommand:copyForContext.copyTabGroup",
     "onCommand:copyForContext.copyAllTabs",
-    "onCommand:copyForContext.copySelectedTab"
+    "onCommand:copyForContext.copySelectedTab",
+    "onCommand:copyForContext.copyFolderStructure",
+    "onCommand:copyForContext.copyFolderWithFileStructure"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -24,12 +26,17 @@
         "copyForContext.minifyContent": {
           "type": "boolean",
           "default": false,
-          "description": "When enabled, fully minifies code by removing all comments, unnecessary whitespace, and newlines - similar to JavaScript minification"
+          "description": "When enabled,fully minifies code by removing all comments,unnecessary whitespace,and newlines - similar to JavaScript minification"
         },
         "copyForContext.removeComments": {
           "type": "boolean",
           "default": true,
-          "description": "When minification is enabled, controls whether comments are removed from the code. Only applies when minifyContent is true."
+          "description": "When minification is enabled,controls whether comments are removed from the code. Only applies when minifyContent is true."
+        },
+        "copyForContext.respectGitignore": {
+          "type": "boolean",
+          "default": true,
+          "description": "When enabled, files and folders listed in .gitignore will be excluded from the copy process"
         }
       }
     },
@@ -53,6 +60,14 @@
       {
         "command": "copyForContext.copySelectedTab",
         "title": "Copy Selected Files for Context"
+      },
+      {
+        "command": "copyForContext.copyFolderStructure",
+        "title": "Copy Folder Structure Only"
+      },
+      {
+        "command": "copyForContext.copyFolderWithFileStructure",
+        "title": "Copy Folder Structure with File Structure"
       }
     ],
     "menus": {
@@ -60,6 +75,16 @@
         {
           "command": "copyForContext.copySelectedFiles",
           "when": "explorerResourceIsFolder == false",
+          "group": "7_modification"
+        },
+        {
+          "command": "copyForContext.copyFolderStructure",
+          "when": "explorerResourceIsFolder == true",
+          "group": "7_modification"
+        },
+        {
+          "command": "copyForContext.copyFolderWithFileStructure",
+          "when": "explorerResourceIsFolder == true",
           "group": "7_modification"
         }
       ],
@@ -97,6 +122,12 @@
         {
           "command": "copyForContext.copySelectedTab",
           "when": "editorIsOpen"
+        },
+        {
+          "command": "copyForContext.copyFolderStructure"
+        },
+        {
+          "command": "copyForContext.copyFolderWithFileStructure"
         }
       ]
     }

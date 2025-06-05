@@ -8,82 +8,351 @@ interface FileContent {
     language: string;
 }
 
+interface FolderNode {
+    name: string;
+    type: 'file' | 'folder';
+    children?: FolderNode[];
+    path: string;
+}
+
 export function activate(context: vscode.ExtensionContext) {
-    // Register all commands
-    const copySelectedFiles = vscode.commands.registerCommand('copyForContext.copySelectedFiles', async (clickedFile: vscode.Uri, selectedFiles: vscode.Uri[]) => {
-        await handleCopySelectedFiles(clickedFile, selectedFiles);
-    });
+    const registerCommand = (command: string, callback: (...args: any[]) => any) => {
+        const disposable = vscode.commands.registerCommand(command, async (...args) => {
+            try {
+                await callback(...args);
+            } catch (error) {
+                console.error(`Error in ${command}:`, error);
+                vscode.window.showErrorMessage(`Error: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        });
+        context.subscriptions.push(disposable);
+    };
 
-    const copyActiveFile = vscode.commands.registerCommand('copyForContext.copyActiveFile', async () => {
-        await handleCopyActiveFile();
-    });
-
-    const copyTabGroup = vscode.commands.registerCommand('copyForContext.copyTabGroup', async () => {
-        await handleCopyTabGroup();
-    });
-
-    const copyAllTabs = vscode.commands.registerCommand('copyForContext.copyAllTabs', async () => {
-        await handleCopyAllTabs();
-    });
-
-    const copySelectedTab = vscode.commands.registerCommand('copyForContext.copySelectedTab', async () => {
-        await handleCopySelectedTab();
-    });
-
-    context.subscriptions.push(
-        copySelectedFiles,
-        copyActiveFile,
-        copyTabGroup,
-        copyAllTabs,
-        copySelectedTab
-    );
+    registerCommand('copyForContext.copySelectedFiles', handleCopySelectedFiles);
+    registerCommand('copyForContext.copyActiveFile', handleCopyActiveFile);
+    registerCommand('copyForContext.copyTabGroup', handleCopyTabGroup);
+    registerCommand('copyForContext.copyAllTabs', handleCopyAllTabs);
+    registerCommand('copyForContext.copySelectedTab', handleCopySelectedTab);
+    registerCommand('copyForContext.copyFolderStructure', handleCopyFolderStructure);
+    registerCommand('copyForContext.copyFolderWithFileStructure', handleCopyFolderWithFileStructure);
 }
 
 async function handleCopySelectedFiles(clickedFile: vscode.Uri, selectedFiles: vscode.Uri[]) {
+    let filesToProcess: vscode.Uri[] = [];
+    
+    if (selectedFiles?.length > 0) {
+        filesToProcess = selectedFiles;
+    } else if (clickedFile) {
+        filesToProcess = [clickedFile];
+    } else {
+        vscode.window.showWarningMessage('No files selected');
+        return;
+    }
+
+    const validFiles: FileContent[] = [];
+    const batchSize = 10;
+    
+    for (let i = 0; i < filesToProcess.length; i += batchSize) {
+        const batch = filesToProcess.slice(i, i + batchSize);
+        const batchResults = await Promise.all(batch.map(async (fileUri) => {
+            if (await isFile(fileUri) && !(await shouldIgnoreFile(fileUri))) {
+                return await readFileContent(fileUri);
+            }
+            return null;
+        }));
+        
+        for (const result of batchResults) {
+            if (result) validFiles.push(result);
+        }
+    }
+
+    if (validFiles.length === 0) {
+        vscode.window.showWarningMessage('No valid files to copy');
+        return;
+    }
+
+    const markdown = await generateMarkdown(validFiles);
+    await copyToClipboard(markdown);
+    vscode.window.showInformationMessage(`Copied ${validFiles.length} file(s) to clipboard`);
+}
+
+async function handleCopyFolderStructure(clickedFolder: vscode.Uri, selectedFolders: vscode.Uri[]) {
     try {
-        // When files are selected in Explorer, VS Code passes:
-        // - clickedFile: the file that was right-clicked
-        // - selectedFiles: array of all selected files (including the clicked file)
+        let foldersToProcess: vscode.Uri[] = [];
         
-        let filesToProcess: vscode.Uri[] = [];
-        
-        if (selectedFiles && selectedFiles.length > 0) {
-            // Multiple files selected - use all selected files
-            filesToProcess = selectedFiles;
-        } else if (clickedFile) {
-            // Only one file clicked - use just that file
-            filesToProcess = [clickedFile];
+        if (selectedFolders && selectedFolders.length > 0) {
+            foldersToProcess = selectedFolders;
+        } else if (clickedFolder) {
+            foldersToProcess = [clickedFolder];
         } else {
-            vscode.window.showWarningMessage('No files selected');
+            vscode.window.showWarningMessage('No folders selected');
             return;
         }
 
-        console.log(`Processing ${filesToProcess.length} files:`, filesToProcess.map(f => f.fsPath));
+        const structures: FolderNode[] = [];
+        
+        for (const folderUri of foldersToProcess) {
+            const structure = await buildFolderStructure(folderUri, false);
+            if (structure) {
+                structures.push(structure);
+            }
+        }
 
-        const fileContents = await Promise.all(
-            filesToProcess.map(async (fileUri) => {
-                if (await isFile(fileUri)) {
-                    return await readFileContent(fileUri);
-                }
-                return null;
-            })
-        );
-
-        const validFiles = fileContents.filter((file): file is FileContent => file !== null);
-        if (validFiles.length === 0) {
-            vscode.window.showWarningMessage('No valid files to copy');
+        if (structures.length === 0) {
+            vscode.window.showWarningMessage('No valid folders to copy');
             return;
         }
 
-        const markdown = await generateMarkdown(validFiles);
+        const markdown = generateFolderStructureMarkdown(structures);
         await copyToClipboard(markdown);
-        vscode.window.showInformationMessage(`Copied ${validFiles.length} file(s) to clipboard`);
+        vscode.window.showInformationMessage(`Copied ${structures.length} folder structure(s) to clipboard`);
     } catch (error) {
-        console.error('Error in handleCopySelectedFiles:', error);
-        vscode.window.showErrorMessage(`Error copying files: ${error}`);
+        console.error('Error in handleCopyFolderStructure:', error);
+        vscode.window.showErrorMessage(`Error copying folder structure: ${error}`);
     }
 }
 
+async function handleCopyFolderWithFileStructure(clickedFolder: vscode.Uri, selectedFolders: vscode.Uri[]) {
+    try {
+        let foldersToProcess: vscode.Uri[] = [];
+        
+        if (selectedFolders && selectedFolders.length > 0) {
+            foldersToProcess = selectedFolders;
+        } else if (clickedFolder) {
+            foldersToProcess = [clickedFolder];
+        } else {
+            vscode.window.showWarningMessage('No folders selected');
+            return;
+        }
+
+        const structures: FolderNode[] = [];
+        
+        for (const folderUri of foldersToProcess) {
+            const structure = await buildFolderStructure(folderUri, true);
+            if (structure) {
+                structures.push(structure);
+            }
+        }
+
+        if (structures.length === 0) {
+            vscode.window.showWarningMessage('No valid folders to copy');
+            return;
+        }
+
+        const markdown = generateFolderStructureMarkdown(structures);
+        await copyToClipboard(markdown);
+        vscode.window.showInformationMessage(`Copied ${structures.length} folder structure(s) with file structure to clipboard`);
+    } catch (error) {
+        console.error('Error in handleCopyFolderWithFileStructure:', error);
+        vscode.window.showErrorMessage(`Error copying folder structure with file structure: ${error}`);
+    }
+}
+
+async function buildFolderStructure(folderUri: vscode.Uri, includeFiles: boolean): Promise<FolderNode | null> {
+    try {
+        const stat = await vscode.workspace.fs.stat(folderUri);
+        if (stat.type !== vscode.FileType.Directory) {
+            return null;
+        }
+
+        if (await shouldIgnoreFile(folderUri)) {
+            return null;
+        }
+
+        const folderName = path.basename(folderUri.fsPath);
+        const relativePath = getRelativePath(folderUri);
+        
+        const node: FolderNode = {
+            name: folderName,
+            type: 'folder',
+            path: relativePath,
+            children: []
+        };
+
+        const entries = await vscode.workspace.fs.readDirectory(folderUri);
+        
+        for (const [name, type] of entries) {
+            const childUri = vscode.Uri.joinPath(folderUri, name);
+            
+            if (await shouldIgnoreFile(childUri)) {
+                continue;
+            }
+
+            if (type === vscode.FileType.Directory) {
+                const childNode = await buildFolderStructure(childUri, includeFiles);
+                if (childNode) {
+                    node.children!.push(childNode);
+                }
+            } else if (type === vscode.FileType.File && includeFiles) {
+                const childRelativePath = getRelativePath(childUri);
+                node.children!.push({
+                    name,
+                    type: 'file',
+                    path: childRelativePath
+                });
+            }
+        }
+
+        // Sort children: folders first, then files, both alphabetically
+        node.children!.sort((a, b) => {
+            if (a.type !== b.type) {
+                return a.type === 'folder' ? -1 : 1;
+            }
+            return a.name.localeCompare(b.name);
+        });
+
+        return node;
+    } catch (error) {
+        console.error(`Error building folder structure for ${folderUri.fsPath}:`, error);
+        return null;
+    }
+}
+
+
+
+function generateFolderStructureMarkdown(structures: FolderNode[]): string {
+    let markdown = '# Folder Structure\n\n';
+    
+    structures.forEach((structure, index) => {
+        if (index > 0) {
+            markdown += '\n\n';
+        }
+        markdown += `## ${structure.path}\n\n`;
+        markdown += '```\n';
+        markdown += renderFolderTree(structure, 0);
+        markdown += '```';
+    });
+    
+    return markdown;
+}
+
+
+
+function renderFolderTree(node: FolderNode, depth: number): string {
+    const indent = '  '.repeat(depth);
+    const prefix = node.type === 'folder' ? '📁 ' : '📄 ';
+    let result = `${indent}${prefix}${node.name}\n`;
+    
+    if (node.children && node.children.length > 0) {
+        node.children.forEach(child => {
+            result += renderFolderTree(child, depth + 1);
+        });
+    }
+    
+    return result;
+}
+
+async function shouldIgnoreFile(uri: vscode.Uri): Promise<boolean> {
+    const config = vscode.workspace.getConfiguration('copyForContext');
+    const respectGitignore = config.get<boolean>('respectGitignore', true);
+    
+    if (!respectGitignore) {
+        return false;
+    }
+
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
+    if (!workspaceFolder) {
+        return false;
+    }
+
+    try {
+        const gitignorePath = path.join(workspaceFolder.uri.fsPath, '.gitignore');
+        
+        let gitignoreExists = false;
+        try {
+            await vscode.workspace.fs.stat(vscode.Uri.file(gitignorePath));
+            gitignoreExists = true;
+        } catch {
+            gitignoreExists = false;
+        }
+        
+        if (!gitignoreExists) {
+            return false;
+        }
+
+        const gitignoreContent = await vscode.workspace.fs.readFile(vscode.Uri.file(gitignorePath));
+        const gitignoreText = Buffer.from(gitignoreContent).toString('utf8');
+        const relativePath = path.relative(workspaceFolder.uri.fsPath, uri.fsPath);
+        
+        return isIgnoredByGitignore(relativePath, gitignoreText);
+    } catch (error) {
+        console.error('Error checking gitignore:', error);
+        return false;
+    }
+}
+
+function isIgnoredByGitignore(filePath: string, gitignoreContent: string): boolean {
+    const lines = gitignoreContent
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line && !line.startsWith('#'));
+    
+    const normalizedPath = filePath.replace(/\\/g, '/');
+    
+    for (const pattern of lines) {
+        if (matchesGitignorePattern(normalizedPath, pattern)) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+function matchesGitignorePattern(filePath: string, pattern: string): boolean {
+    // Basic gitignore pattern matching
+    // This is a simplified implementation - a full implementation would be more complex
+    
+    // Remove leading slash
+    if (pattern.startsWith('/')) {
+        pattern = pattern.substring(1);
+    }
+    
+    // Handle directory patterns
+    if (pattern.endsWith('/')) {
+        pattern = pattern.substring(0, pattern.length - 1);
+        // Check if any part of the path matches the directory pattern
+        const pathParts = filePath.split('/');
+        return pathParts.some(part => matchesSimplePattern(part, pattern));
+    }
+    
+    // Handle wildcards
+    if (pattern.includes('*')) {
+        const regexPattern = pattern
+            .replace(/\./g, '\\.')
+            .replace(/\*/g, '.*');
+        const regex = new RegExp(`^${regexPattern}$`);
+        
+        // Check if the full path or any part matches
+        if (regex.test(filePath)) {
+            return true;
+        }
+        
+        // Check path segments
+        const pathParts = filePath.split('/');
+        return pathParts.some(part => regex.test(part));
+    }
+    
+    // Exact match or path segment match
+    if (filePath === pattern) {
+        return true;
+    }
+    
+    // Check if pattern matches any path segment
+    const pathParts = filePath.split('/');
+    return pathParts.includes(pattern);
+}
+
+function matchesSimplePattern(text: string, pattern: string): boolean {
+    if (pattern.includes('*')) {
+        const regexPattern = pattern
+            .replace(/\./g, '\\.')
+            .replace(/\*/g, '.*');
+        return new RegExp(`^${regexPattern}$`).test(text);
+    }
+    return text === pattern;
+}
+
+// Keep all existing functions unchanged
 async function handleCopyActiveFile() {
     try {
         const activeEditor = vscode.window.activeTextEditor;
@@ -124,11 +393,9 @@ async function handleCopyTabGroup() {
             return;
         }
 
-        const fileContents = await Promise.all(
-            fileUris.map(uri => readFileContent(uri))
-        );
-
+        const fileContents = await Promise.all(fileUris.map(uri => readFileContent(uri)));
         const validFiles = fileContents.filter((file): file is FileContent => file !== null);
+
         const markdown = await generateMarkdown(validFiles);
         await copyToClipboard(markdown);
         vscode.window.showInformationMessage(`Copied ${validFiles.length} file(s) from tab group to clipboard`);
@@ -149,11 +416,9 @@ async function handleCopyAllTabs() {
             return;
         }
 
-        const fileContents = await Promise.all(
-            fileUris.map(uri => readFileContent(uri))
-        );
-
+        const fileContents = await Promise.all(fileUris.map(uri => readFileContent(uri)));
         const validFiles = fileContents.filter((file): file is FileContent => file !== null);
+
         const markdown = await generateMarkdown(validFiles);
         await copyToClipboard(markdown);
         vscode.window.showInformationMessage(`Copied ${validFiles.length} file(s) from all tabs to clipboard`);
@@ -164,10 +429,6 @@ async function handleCopyAllTabs() {
 
 async function handleCopySelectedTab() {
     try {
-        // In VS Code, there isn't a direct concept of "multiple selected tabs"
-        // So we'll implement this as a multi-step selection process
-        
-        // Get all open tabs across all tab groups
         const allTabs = vscode.window.tabGroups.all.flatMap(group => group.tabs);
         const fileUris = allTabs
             .map(tab => (tab.input as vscode.TabInputText)?.uri)
@@ -178,7 +439,6 @@ async function handleCopySelectedTab() {
             return;
         }
 
-        // Create quick pick items with file names and paths
         const quickPickItems = fileUris.map(uri => {
             const relativePath = getRelativePath(uri);
             return {
@@ -189,22 +449,18 @@ async function handleCopySelectedTab() {
             };
         });
 
-        // Show multi-select quick pick
         const selectedItems = await vscode.window.showQuickPick(quickPickItems, {
             canPickMany: true,
             placeHolder: 'Select files to copy for context (use Space to select multiple)'
         });
 
         if (!selectedItems || selectedItems.length === 0) {
-            return; // User cancelled or selected nothing
+            return;
         }
 
-        // Read content of selected files
-        const fileContents = await Promise.all(
-            selectedItems.map(item => readFileContent(item.uri))
-        );
-
+        const fileContents = await Promise.all(selectedItems.map(item => readFileContent(item.uri)));
         const validFiles = fileContents.filter((file): file is FileContent => file !== null);
+
         const markdown = await generateMarkdown(validFiles);
         await copyToClipboard(markdown);
         vscode.window.showInformationMessage(`Copied ${validFiles.length} selected file(s) to clipboard`);
@@ -293,22 +549,15 @@ function getLanguageFromUri(uri: vscode.Uri): string {
 
 function getRelativePath(uri: vscode.Uri): string {
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
-    let relativePath: string;
-    
-    if (workspaceFolder) {
-        relativePath = path.relative(workspaceFolder.uri.fsPath, uri.fsPath);
-    } else {
-        relativePath = path.basename(uri.fsPath);
-    }
-    
-    // Convert backslashes to forward slashes for consistency
+    let relativePath = workspaceFolder
+        ? path.relative(workspaceFolder.uri.fsPath, uri.fsPath)
+        : path.basename(uri.fsPath);
+        
     return relativePath.replace(/\\/g, '/');
 }
 
 async function generateMarkdown(files: FileContent[]): Promise<string> {
     let markdown = '';
-    
-    // Get configuration settings
     const config = vscode.workspace.getConfiguration('copyForContext');
     const shouldMinify = config.get<boolean>('minifyContent', false);
 
@@ -316,16 +565,15 @@ async function generateMarkdown(files: FileContent[]): Promise<string> {
         if (index > 0) {
             markdown += shouldMinify ? '\n' : '\n\n';
         }
-
         markdown += `## ${file.path}\n${shouldMinify ? '' : '\n'}`;
         markdown += '```' + file.language + '\n';
-        
+
         let content = file.content;
         if (shouldMinify) {
             content = minifyContent(content, file.language);
         }
-        
         markdown += content;
+
         if (!content.endsWith('\n')) {
             markdown += '\n';
         }
@@ -336,91 +584,54 @@ async function generateMarkdown(files: FileContent[]): Promise<string> {
 }
 
 function minifyContent(content: string, language: string): string {
-    // Get configuration settings
     const config = vscode.workspace.getConfiguration('copyForContext');
     const shouldRemoveComments = config.get<boolean>('removeComments', true);
-    
     let minified = content;
-    
-    // Remove comments only if the setting is enabled
+
     if (shouldRemoveComments) {
-        // Remove multi-line comments first
         minified = removeMultiLineComments(minified, language);
-        
-        // Remove single-line comments
         minified = removeSingleLineComments(minified, language);
     }
-    
-    // Split into lines and process
-    const lines = minified.split('\n');
-    const processedLines: string[] = [];
-    
-    for (let line of lines) {
-        line = line.trim();
-        
-        // Skip empty lines
-        if (line === '') {
-            continue;
-        }
-        
-        processedLines.push(line);
-    }
-    
-    // Join all lines and apply language-specific minification
-    let result = processedLines.join(' ');
-    
-    // Apply language-specific minification rules
-    result = applyLanguageSpecificMinification(result, language);
-    
-    // Final cleanup - remove excessive spaces
-    result = result.replace(/\s+/g, ' ').trim();
-    
-    return result;
+
+    // Optimized minification: process in bulk instead of line-by-line
+    minified = minified
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line !== '')
+        .join(' ');
+
+    minified = applyLanguageSpecificMinification(minified, language);
+    return minified.replace(/\s+/g, ' ').trim();
 }
 
 function removeMultiLineComments(content: string, language: string): string {
-    // JavaScript/TypeScript/Java/C/C++/C# style /* */ comments
     if (['javascript', 'typescript', 'jsx', 'tsx', 'java', 'c', 'cpp', 'csharp', 'go', 'rust', 'swift', 'kotlin', 'scala', 'css', 'scss', 'less'].includes(language)) {
         return content.replace(/\/\*[\s\S]*?\*\//g, '');
     }
-    
-    // Python triple quotes (docstrings)
     if (language === 'python') {
         return content.replace(/"""[\s\S]*?"""/g, '').replace(/'''[\s\S]*?'''/g, '');
     }
-    
-    // HTML/XML comments
     if (['html', 'xml'].includes(language)) {
         return content.replace(/<!--[\s\S]*?-->/g, '');
     }
-    
     return content;
 }
 
 function removeSingleLineComments(content: string, language: string): string {
     const lines = content.split('\n');
     const cleanLines: string[] = [];
-    
+
     for (let line of lines) {
-        // JavaScript/TypeScript/Java/C/C++/C# style // comments
         if (['javascript', 'typescript', 'jsx', 'tsx', 'java', 'c', 'cpp', 'csharp', 'go', 'rust', 'swift', 'kotlin', 'scala'].includes(language)) {
-            // Handle string literals to avoid removing // inside strings
             line = removeCommentFromLine(line, '//', language);
-        }
-        
-        // Python/Ruby/Shell style # comments
-        else if (['python', 'ruby', 'bash', 'sh', 'yaml', 'toml'].includes(language)) {
+        } else if (['python', 'ruby', 'bash', 'sh', 'yaml', 'toml'].includes(language)) {
             line = removeCommentFromLine(line, '#', language);
-        }
-        
-        // CSS/SCSS single-line comments
-        else if (['scss', 'sass'].includes(language)) {
+        } else if (['scss', 'sass'].includes(language)) {
             line = removeCommentFromLine(line, '//', language);
         }
-        
         cleanLines.push(line);
     }
-    
+
     return cleanLines.join('\n');
 }
 
@@ -428,128 +639,89 @@ function removeCommentFromLine(line: string, commentChar: string, language: stri
     let inString = false;
     let stringChar = '';
     let escaped = false;
-    
+
     for (let i = 0; i < line.length - (commentChar.length - 1); i++) {
         const char = line[i];
-        
+
         if (escaped) {
             escaped = false;
             continue;
         }
-        
+
         if (char === '\\') {
             escaped = true;
             continue;
         }
-        
-        // Handle string literals
+
         if ((char === '"' || char === "'" || char === '`') && !inString) {
             inString = true;
             stringChar = char;
             continue;
         }
-        
+
         if (char === stringChar && inString) {
             inString = false;
             stringChar = '';
             continue;
         }
-        
-        // Check for comment start
+
         if (!inString && line.substring(i, i + commentChar.length) === commentChar) {
             return line.substring(0, i).trim();
         }
     }
-    
+
     return line;
 }
 
 function applyLanguageSpecificMinification(content: string, language: string): string {
     let result = content;
-    
-    // JavaScript/TypeScript specific minification
+
     if (['javascript', 'typescript', 'jsx', 'tsx'].includes(language)) {
-        // Remove spaces around operators (but be careful with edge cases)
         result = result.replace(/\s*([+\-*/%=<>!&|^~,;:?()])\s*/g, '$1');
-        // Remove spaces around curly braces
         result = result.replace(/\s*([{}])\s*/g, '$1');
-        // Remove spaces around square brackets
         result = result.replace(/\s*([[\]])\s*/g, '$1');
-        // Add back necessary spaces for keywords
-        result = result.replace(/\b(if|else|for|while|do|switch|case|return|function|const|let|var|class|extends|implements|import|export|from|as|typeof|instanceof)\b/g, ' $1 ');
+        result = result.replace(/\b( if | else | for | while | do | switch | case | return | function | const | let | var | class | extends | implements | import | export | from | as | typeof | instanceof )\b/g, ' $1 ');
         result = result.replace(/\s+/g, ' ');
-    }
-    
-    // CSS specific minification
-    else if (['css', 'scss', 'less'].includes(language)) {
-        // Remove spaces around CSS syntax
+    } else if (['css', 'scss', 'less'].includes(language)) {
         result = result.replace(/\s*([{}:;,>+~])\s*/g, '$1');
-        // Remove spaces around parentheses
         result = result.replace(/\s*([()])\s*/g, '$1');
-        // Remove trailing semicolons before }
         result = result.replace(/;}/g, '}');
-    }
-    
-    // JSON specific minification
-    else if (language === 'json') {
+    } else if (language === 'json') {
         result = result.replace(/\s*([{}[\]:,])\s*/g, '$1');
-    }
-    
-    // Python specific minification (be more careful due to indentation significance)
-    else if (language === 'python') {
-        // Only remove extra spaces, keep structure
+    } else if (language === 'python') {
         result = result.replace(/\s*([=+\-*/%<>!,()[\]{}:;])\s*/g, '$1');
-        // Add back necessary spaces for keywords
-        result = result.replace(/\b(if|elif|else|for|while|def|class|import|from|as|return|yield|try|except|finally|with|lambda|and|or|not|in|is)\b/g, ' $1 ');
+        result = result.replace(/\b( if |elif| else | for | while |def| class | import | from | as | return |yield|try|except|finally|with|lambda|and|or|not|in|is)\b/g, ' $1 ');
         result = result.replace(/\s+/g, ' ');
-    }
-    
-    // Java/C/C++/C# specific minification
-    else if (['java', 'c', 'cpp', 'csharp'].includes(language)) {
+    } else if (['java', 'c', 'cpp', 'csharp'].includes(language)) {
         result = result.replace(/\s*([+\-*/%=<>!&|^~,;:?(){}[\]])\s*/g, '$1');
-        // Add back necessary spaces for keywords
-        result = result.replace(/\b(if|else|for|while|do|switch|case|return|class|interface|public|private|protected|static|final|abstract|extends|implements|import|package|try|catch|finally|throw|throws|new|this|super|void|int|long|double|float|boolean|char|string)\b/g, ' $1 ');
+        result = result.replace(/\b( if | else | for | while | do | switch | case | return | class |interface|public|private|protected|static|final|abstract| extends | implements | import |package|try|catch|finally|throw|throws|new|this|super|void|int|long|double|float|boolean|char|string)\b/g, ' $1 ');
         result = result.replace(/\s+/g, ' ');
-    }
-    
-    // HTML/XML minification
-    else if (['html', 'xml'].includes(language)) {
-        // Remove spaces between tags
+    } else if (['html', 'xml'].includes(language)) {
         result = result.replace(/>\s+</g, '><');
-        // Remove extra whitespace within tags
         result = result.replace(/\s+/g, ' ');
-    }
-    
-    // YAML/JSON formatting (preserve some structure)
-    else if (['yaml', 'yml'].includes(language)) {
-        // Keep minimal formatting for readability
+    } else if (['yaml', 'yml'].includes(language)) {
         result = result.replace(/\s*:\s*/g, ':');
         result = result.replace(/\s*-\s*/g, '-');
     }
-    
+
     return result.trim();
 }
 
 function isComment(line: string, language: string): boolean {
-    // This function is now mainly used as a fallback
-    // Most comment removal is handled by the dedicated functions above
     const trimmed = line.trim();
-    
-    // JavaScript/TypeScript/Java/C/C++/C# style comments
+
     if (['javascript', 'typescript', 'jsx', 'tsx', 'java', 'c', 'cpp', 'csharp', 'go', 'rust', 'swift', 'kotlin', 'scala'].includes(language)) {
         return trimmed.startsWith('//');
     }
-    
-    // Python/Ruby/Shell style comments
+
     if (['python', 'ruby', 'bash', 'sh', 'yaml', 'toml'].includes(language)) {
         return trimmed.startsWith('#');
     }
-    
-    // CSS comments
+
     if (['css', 'scss', 'sass', 'less'].includes(language)) {
         return trimmed.startsWith('//');
     }
-    
+
     return false;
 }
 
@@ -566,4 +738,6 @@ async function isFile(uri: vscode.Uri): Promise<boolean> {
     }
 }
 
-export function deactivate() {}
+export function deactivate() {
+    // Clean up any resources if needed
+}
