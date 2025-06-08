@@ -599,7 +599,7 @@ async function generateMarkdown(files: FileContent[]): Promise<string> {
         const shouldMinify = file.lineRange ? selectionMinify : globalMinify;
         
         if (index > 0) {
-            markdown += shouldMinify ? '\n' : '\n\n';
+            markdown += '\n';
         }
         
         // Append line range to file path if available and the setting is enabled
@@ -608,7 +608,7 @@ async function generateMarkdown(files: FileContent[]): Promise<string> {
             filePath += `:${file.lineRange.start}${file.lineRange.start !== file.lineRange.end ? `-${file.lineRange.end}` : ''}`;
         }
         
-        markdown += `## ${filePath}\n${shouldMinify ? '' : '\n'}`;
+        markdown += `## ${filePath}\n`;
         markdown += '```' + file.language + '\n';
 
         let content = file.content;
