@@ -16,7 +16,8 @@
     "onCommand:copyForContext.copyAllTabs",
     "onCommand:copyForContext.copySelectedTab",
     "onCommand:copyForContext.copyFolderStructure",
-    "onCommand:copyForContext.copyFolderWithFileStructure"
+    "onCommand:copyForContext.copyFolderWithFileStructure",
+    "onCommand:copyForContext.copyLineRange"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -46,6 +47,21 @@
           ],
           "default": "tree",
           "description": "Choose the output format for folder structure: 'tree' shows visual tree with emojis, 'json' shows structured JSON format"
+        },
+        "copyForContext.appendLineNumbers": {
+          "type": "boolean",
+          "default": true,
+          "description": "When enabled, appends line numbers to the file path when copying a line range"
+        },
+        "copyForContext.selectionMinifyContent": {
+          "type": "boolean",
+          "default": false,
+          "description": "When enabled, minifies code specifically for line range selections, independent of the global minifyContent setting"
+        },
+        "copyForContext.copyFullLines": {
+          "type": "boolean",
+          "default": false,
+          "description": "When enabled, copies the entire lines from start to end, rather than just the selected text"
         }
       }
     },
@@ -77,6 +93,18 @@
       {
         "command": "copyForContext.copyFolderWithFileStructure",
         "title": "Copy Folder Structure with File Structure"
+      },
+      {
+        "command": "copyForContext.copyLineRange",
+        "title": "Copy Selected Line Range for Context"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "copyForContext.copyLineRange",
+        "key": "ctrl+shift+c",
+        "mac": "cmd+shift+c",
+        "when": "editorHasSelection && editorTextFocus"
       }
     ],
     "menus": {
@@ -115,6 +143,14 @@
           "group": "1_copy"
         }
       ],
+      "editor/context": [
+        {
+          "command": "copyForContext.copyLineRange",
+          "when": "editorHasSelection",
+          "group": "1_copy",
+          "title": "Copy Selected Line Range for Context"
+        }
+      ],
       "commandPalette": [
         {
           "command": "copyForContext.copyActiveFile",
@@ -131,6 +167,10 @@
         {
           "command": "copyForContext.copySelectedTab",
           "when": "editorIsOpen"
+        },
+        {
+          "command": "copyForContext.copyLineRange",
+          "when": "editorHasSelection && editorIsOpen"
         },
         {
           "command": "copyForContext.copyFolderStructure"

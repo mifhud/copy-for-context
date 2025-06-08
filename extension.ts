@@ -6,6 +6,10 @@ interface FileContent {
     path: string;
     content: string;
     language: string;
+    lineRange?: {
+        start: number;
+        end: number;
+    };
 }
 
 interface FolderNode {
@@ -35,6 +39,7 @@ export function activate(context: vscode.ExtensionContext) {
     registerCommand('copyForContext.copySelectedTab', handleCopySelectedTab);
     registerCommand('copyForContext.copyFolderStructure', handleCopyFolderStructure);
     registerCommand('copyForContext.copyFolderWithFileStructure', handleCopyFolderWithFileStructure);
+    registerCommand('copyForContext.copyLineRange', handleCopyLineRange);
 }
 
 async function handleCopySelectedFiles(clickedFile: vscode.Uri, selectedFiles: vscode.Uri[]) {
@@ -583,13 +588,27 @@ function getRelativePath(uri: vscode.Uri): string {
 async function generateMarkdown(files: FileContent[]): Promise<string> {
     let markdown = '';
     const config = vscode.workspace.getConfiguration('copyForContext');
-    const shouldMinify = config.get<boolean>('minifyContent', false);
+    const globalMinify = config.get<boolean>('minifyContent', false);
+    const selectionMinify = config.get<boolean>('selectionMinifyContent', false);
+    const appendLineNumbers = config.get<boolean>('appendLineNumbers', true);
 
     files.forEach((file, index) => {
+        // Determine if this file should be minified
+        // If it's a line range selection, use the selection-specific setting
+        // Otherwise, use the global setting
+        const shouldMinify = file.lineRange ? selectionMinify : globalMinify;
+        
         if (index > 0) {
             markdown += shouldMinify ? '\n' : '\n\n';
         }
-        markdown += `## ${file.path}\n${shouldMinify ? '' : '\n'}`;
+        
+        // Append line range to file path if available and the setting is enabled
+        let filePath = file.path;
+        if (file.lineRange && appendLineNumbers) {
+            filePath += `:${file.lineRange.start}${file.lineRange.start !== file.lineRange.end ? `-${file.lineRange.end}` : ''}`;
+        }
+        
+        markdown += `## ${filePath}\n${shouldMinify ? '' : '\n'}`;
         markdown += '```' + file.language + '\n';
 
         let content = file.content;
@@ -759,6 +778,103 @@ async function isFile(uri: vscode.Uri): Promise<boolean> {
         return stat.type === vscode.FileType.File;
     } catch {
         return false;
+    }
+}
+
+async function handleCopyLineRange() {
+    try {
+        const activeEditor = vscode.window.activeTextEditor;
+        if (!activeEditor) {
+            vscode.window.showWarningMessage('No active editor');
+            return;
+        }
+
+        const selection = activeEditor.selection;
+        if (selection.isEmpty) {
+            vscode.window.showWarningMessage('No text selected');
+            return;
+        }
+
+        // Get the start and end lines (1-based for display)
+        const startLine = selection.start.line + 1;
+        const endLine = selection.end.line + 1;
+
+        // Get the configuration
+        const config = vscode.workspace.getConfiguration('copyForContext');
+        const copyFullLines = config.get<boolean>('copyFullLines', false);
+
+        let selectedText;
+        if (copyFullLines) {
+            // Get the full lines from start to end
+            const startLineText = activeEditor.document.lineAt(selection.start.line).text;
+            const endLineText = activeEditor.document.lineAt(selection.end.line).text;
+            
+            // If it's a single line selection
+            if (startLine === endLine) {
+                selectedText = startLineText;
+            } else {
+                // For multi-line selections, get all lines
+                const range = new vscode.Range(
+                    new vscode.Position(selection.start.line, 0),
+                    new vscode.Position(selection.end.line, activeEditor.document.lineAt(selection.end.line).text.length)
+                );
+                selectedText = activeEditor.document.getText(range);
+            }
+        } else {
+            // Get just the selected text
+            selectedText = activeEditor.document.getText(selection);
+        }
+
+        if (!selectedText) {
+            vscode.window.showWarningMessage('Selected text is empty');
+            return;
+        }
+
+        // Create a FileContent object with the selected text and line range
+        const fileContent = await readFileContentWithLineRange(
+            activeEditor.document.uri,
+            startLine,
+            endLine,
+            selectedText
+        );
+
+        if (!fileContent) {
+            vscode.window.showWarningMessage('Could not read file content');
+            return;
+        }
+
+        const markdown = await generateMarkdown([fileContent]);
+        await copyToClipboard(markdown);
+        vscode.window.showInformationMessage(`Copied line range ${startLine}-${endLine} to clipboard`);
+    } catch (error) {
+        vscode.window.showErrorMessage(`Error copying line range: ${error}`);
+    }
+}
+
+async function readFileContentWithLineRange(
+    uri: vscode.Uri,
+    startLine: number,
+    endLine: number,
+    selectedText: string
+): Promise<FileContent | null> {
+    try {
+        const document = await vscode.workspace.openTextDocument(uri);
+        const language = getLanguageFromUri(uri);
+        const relativePath = getRelativePath(uri);
+        
+        // Create a FileContent object with the selected text and line range
+        return {
+            path: relativePath,
+            content: selectedText,
+            language: language,
+            lineRange: {
+                start: startLine,
+                end: endLine
+            }
+        };
+    } catch (error) {
+        console.error(`Error reading file ${uri.fsPath}:`, error);
+        return null;
     }
 }
 
