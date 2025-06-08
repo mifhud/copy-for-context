@@ -208,9 +208,9 @@ async function buildFolderStructure(folderUri: vscode.Uri, includeFiles: boolean
     }
 }
 
-
-
 function generateFolderStructureMarkdown(structures: FolderNode[]): string {
+    const config = vscode.workspace.getConfiguration('copyForContext');
+    const structureType = config.get<string>('folderStructureType', 'tree');
     let markdown = '# Folder Structure\n\n';
     
     structures.forEach((structure, index) => {
@@ -218,13 +218,37 @@ function generateFolderStructureMarkdown(structures: FolderNode[]): string {
             markdown += '\n\n';
         }
         markdown += `## ${structure.path}\n\n`;
-        markdown += '```\n';
-        markdown += renderFolderTree(structure, 0);
-        markdown += '```';
+        if (structureType === 'json') {
+            markdown += '```json\n';
+            markdown += JSON.stringify(convertToJsonStructure(structure), null, 2);
+            markdown += '\n```';
+        } else {
+            markdown += '```\n';
+            markdown += renderFolderTree(structure, 0);
+            markdown += '```';
+        }
     });
     
     return markdown;
 }
+
+function convertToJsonStructure(node: FolderNode): any {
+    if (node.type === 'file') {
+        return 'File';
+    }
+    const result: any = {};
+    if (node.children) {
+        for (const child of node.children) {
+            if (child.type === 'file') {
+                result[child.name] = 'File';
+            } else {
+                result[child.name] = convertToJsonStructure(child);
+            }
+        }
+    }
+    return result;
+}
+
 
 
 

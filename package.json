@@ -37,6 +37,15 @@
           "type": "boolean",
           "default": true,
           "description": "When enabled, files and folders listed in .gitignore will be excluded from the copy process"
+        },
+        "copyForContext.folderStructureType": {
+          "type": "string",
+          "enum": [
+            "tree",
+            "json"
+          ],
+          "default": "tree",
+          "description": "Choose the output format for folder structure: 'tree' shows visual tree with emojis, 'json' shows structured JSON format"
         }
       }
     },
