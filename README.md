@@ -25,9 +25,10 @@ A VS Code extension that efficiently copies selected files as markdown with synt
 - Copies contents of all open tabs as markdown
 - Useful for sharing your entire working context
 
-### 🎯 Copy Selected File for Context
+### 🎯 Copy Selected Files for Context
 - Right-click any tab title or use Command Palette
-- Alternative way to copy the currently selected tab file as markdown
+- Opens a quick pick menu to select which open files to copy
+- Allows selective copying from all open tabs
 
 ### 🏗️ Copy Folder Structure Only
 - Right-click on any folder in the Explorer
@@ -41,7 +42,18 @@ A VS Code extension that efficiently copies selected files as markdown with synt
 - Ideal for sharing complete project context
 - Combines folder tree visualization with actual code
 
-### 🚫 Gitignore Support (NEW)
+### ✂️ Copy Selection for Context
+- Select text in an editor and use keyboard shortcut (`Ctrl+Shift+C` / `Cmd+Shift+C`)
+- Copies the selected text as markdown with proper syntax highlighting
+- Includes file path and line numbers in the header
+- Perfect for sharing specific code snippets
+
+### 🔢 Copy Selection with Line Numbers for Context
+- Select text in an editor and use keyboard shortcut (`Ctrl+Shift+Alt+C` / `Cmd+Shift+Alt+C`)
+- Copies the selected text with line numbers prefixed to each line
+- Ideal for referencing specific lines in discussions
+
+### 🚫 Gitignore Support
 - Automatically respects `.gitignore` rules when copying folders
 - Excludes files and directories listed in `.gitignore`
 - Can be toggled on/off in settings
@@ -70,7 +82,18 @@ A VS Code extension that efficiently copies selected files as markdown with synt
    - **Copy This File for Context**
    - **Copy This Tab Group for Context**
    - **Copy All Open Tabs for Context**
-   - **Copy Selected File for Context**
+   - **Copy Selected Files for Context**
+
+### From Editor Context Menu
+1. Select text in an editor
+2. Right-click on the selection
+3. Choose one of the copy options:
+   - **Copy Selection for Context**
+   - **Copy Selection with Line Numbers for Context**
+
+### Using Keyboard Shortcuts
+- `Ctrl+Shift+C` / `Cmd+Shift+C` - Copy Selection for Context
+- `Ctrl+Shift+Alt+C` / `Cmd+Shift+Alt+C` - Copy Selection with Line Numbers for Context
 
 ### From Command Palette
 1. Open Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
@@ -113,6 +136,20 @@ export const Button: React.FC<ButtonProps> = ({ onClick, children }) => {
   border-radius: 4px;
   cursor: pointer;
 }
+```
+```
+
+### Selection with Line Numbers
+Example output:
+```markdown
+## src/components/Button.tsx:10-15
+```tsx
+10: export const Button: React.FC<ButtonProps> = ({ onClick, children }) => {
+11:   return (
+12:     <button onClick={onClick}>
+13:       {children}
+14:     </button>
+15:   );
 ```
 ```
 
@@ -190,6 +227,13 @@ The extension automatically detects and applies syntax highlighting for 40+ lang
 - CSS/SCSS/SASS (`.css`, `.scss`, `.sass`)
 - JSON/YAML (`.json`, `.yaml`, `.yml`)
 - Shell scripts (`.sh`, `.bash`)
+- PowerShell (`.ps1`)
+- R (`.r`, `.R`)
+- Matlab (`.m`)
+- Perl (`.pl`)
+- Lua (`.lua`)
+- VimScript (`.vim`)
+- Dockerfile
 - And many more...
 
 ## Configuration
@@ -200,7 +244,11 @@ Add these settings to your `settings.json`:
 {
   "copyForContext.minifyContent": false,
   "copyForContext.removeComments": true,
-  "copyForContext.respectGitignore": true
+  "copyForContext.respectGitignore": true,
+  "copyForContext.folderStructureType": "tree",
+  "copyForContext.appendLineNumbers": true,
+  "copyForContext.selectionMinifyContent": false,
+  "copyForContext.copyFullLines": false
 }
 ```
 
@@ -214,6 +262,18 @@ Add these settings to your `settings.json`:
 
 - **`copyForContext.respectGitignore`** (boolean, default: `true`)
   - When enabled, files and folders listed in `.gitignore` will be excluded from the copy process. Applies to all folder-related operations.
+
+- **`copyForContext.folderStructureType`** (string, default: `"tree"`)
+  - Choose the output format for folder structure: 'tree' shows visual tree with emojis, 'json' shows structured JSON format
+
+- **`copyForContext.appendLineNumbers`** (boolean, default: `true`)
+  - When enabled, appends line numbers to the file path when copying a line range
+
+- **`copyForContext.selectionMinifyContent`** (boolean, default: `false`)
+  - When enabled, minifies code specifically for line range selections, independent of the global minifyContent setting
+
+- **`copyForContext.copyFullLines`** (boolean, default: `false`)
+  - When enabled, copies the entire lines from start to end, rather than just the selected text
 
 ## Gitignore Support
 
