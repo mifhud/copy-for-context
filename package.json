@@ -17,7 +17,8 @@
     "onCommand:copyForContext.copySelectedTab",
     "onCommand:copyForContext.copyFolderStructure",
     "onCommand:copyForContext.copyFolderWithFileStructure",
-    "onCommand:copyForContext.copyLineRange"
+    "onCommand:copyForContext.copyLineRange",
+    "onCommand:copyForContext.copySelectionWithLineNumbers"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -96,7 +97,11 @@
       },
       {
         "command": "copyForContext.copyLineRange",
-        "title": "Copy Selected Line Range for Context"
+        "title": "Copy Selection for Context"
+      },
+      {
+        "command": "copyForContext.copySelectionWithLineNumbers",
+        "title": "Copy Selection with Line Numbers for Context"
       }
     ],
     "keybindings": [
@@ -104,6 +109,12 @@
         "command": "copyForContext.copyLineRange",
         "key": "ctrl+shift+c",
         "mac": "cmd+shift+c",
+        "when": "editorHasSelection && editorTextFocus"
+      },
+      {
+        "command": "copyForContext.copySelectionWithLineNumbers",
+        "key": "ctrl+shift+alt+c",
+        "mac": "cmd+shift+alt+c",
         "when": "editorHasSelection && editorTextFocus"
       }
     ],
@@ -148,7 +159,13 @@
           "command": "copyForContext.copyLineRange",
           "when": "editorHasSelection",
           "group": "1_copy",
-          "title": "Copy Selected Line Range for Context"
+          "title": "Copy Selection for Context"
+        },
+        {
+          "command": "copyForContext.copySelectionWithLineNumbers",
+          "when": "editorHasSelection",
+          "group": "1_copy",
+          "title": "Copy Selection with Line Numbers for Context"
         }
       ],
       "commandPalette": [
@@ -170,6 +187,10 @@
         },
         {
           "command": "copyForContext.copyLineRange",
+          "when": "editorHasSelection && editorIsOpen"
+        },
+        {
+          "command": "copyForContext.copySelectionWithLineNumbers",
           "when": "editorHasSelection && editorIsOpen"
         },
         {

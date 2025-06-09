@@ -40,6 +40,7 @@ export function activate(context: vscode.ExtensionContext) {
     registerCommand('copyForContext.copyFolderStructure', handleCopyFolderStructure);
     registerCommand('copyForContext.copyFolderWithFileStructure', handleCopyFolderWithFileStructure);
     registerCommand('copyForContext.copyLineRange', handleCopyLineRange);
+    registerCommand('copyForContext.copySelectionWithLineNumbers', handleCopySelectionWithLineNumbers);
 }
 
 async function handleCopySelectedFiles(clickedFile: vscode.Uri, selectedFiles: vscode.Uri[]) {
@@ -222,7 +223,7 @@ function generateFolderStructureMarkdown(structures: FolderNode[]): string {
         if (index > 0) {
             markdown += '\n\n';
         }
-        markdown += `## ${structure.path}\n\n`;
+        markdown += `## ${structure.path}\n`;
         if (structureType === 'json') {
             markdown += '```json\n';
             markdown += JSON.stringify(convertToJsonStructure(structure), null, 2);
@@ -848,6 +849,83 @@ async function handleCopyLineRange() {
         vscode.window.showInformationMessage(`Copied line range ${startLine}-${endLine} to clipboard`);
     } catch (error) {
         vscode.window.showErrorMessage(`Error copying line range: ${error}`);
+    }
+}
+
+async function handleCopySelectionWithLineNumbers() {
+    try {
+        const activeEditor = vscode.window.activeTextEditor;
+        if (!activeEditor) {
+            vscode.window.showWarningMessage('No active editor');
+            return;
+        }
+
+        const selection = activeEditor.selection;
+        if (selection.isEmpty) {
+            vscode.window.showWarningMessage('No text selected');
+            return;
+        }
+
+        // Get the start and end lines (0-based for processing)
+        const startLine = selection.start.line;
+        const endLine = selection.end.line;
+        
+        // Get the relative path of the file
+        const relativePath = getRelativePath(activeEditor.document.uri);
+        const language = getLanguageFromUri(activeEditor.document.uri);
+        
+        // Get configuration
+        const config = vscode.workspace.getConfiguration('copyForContext');
+        const shouldMinify = config.get<boolean>('selectionMinifyContent', false);
+        
+        // Build the content with line numbers
+        let content = '';
+        
+        if (shouldMinify) {
+            // For minified content, collect all lines first
+            let linesWithNumbers = [];
+            for (let i = startLine; i <= endLine; i++) {
+                const lineNumber = i + 1; // Convert to 1-based for display
+                const lineText = activeEditor.document.lineAt(i).text.trim();
+                if (lineText) { // Skip empty lines when minifying
+                    linesWithNumbers.push(`${lineNumber}: ${lineText}`);
+                }
+            }
+            
+            // Join all lines with numbers into a single line
+            content = linesWithNumbers.join(' ');
+        } else {
+            // For regular content, keep line breaks
+            for (let i = startLine; i <= endLine; i++) {
+                const lineNumber = i + 1; // Convert to 1-based for display
+                const lineText = activeEditor.document.lineAt(i).text;
+                content += `${lineNumber}: ${lineText}\n`;
+            }
+        }
+        
+        if (!content) {
+            vscode.window.showWarningMessage('Selected text is empty');
+            return;
+        }
+        
+        // Create file path with line range
+        let filePath = `## ${relativePath}:${startLine + 1}`;
+        if (startLine !== endLine) {
+            filePath += `-${endLine + 1}`;
+        }
+        
+        // Create markdown with file path and line numbers
+        let markdown = `${filePath}\n\`\`\`${language}\n${content}`;
+
+        if (!content.endsWith('\n')) {
+            markdown += '\n';
+        }
+        markdown += '```';
+        
+        await copyToClipboard(markdown);
+        vscode.window.showInformationMessage(`Copied selection with line numbers to clipboard`);
+    } catch (error) {
+        vscode.window.showErrorMessage(`Error copying selection with line numbers: ${error}`);
     }
 }
 
